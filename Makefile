@@ -1,4 +1,7 @@
-.PHONY: test coverage deploy
+.PHONY: test coverage deploy compile
+
+compile:
+	forge compile
 
 test:
 	forge test -vv
