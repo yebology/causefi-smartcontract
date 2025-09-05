@@ -6,8 +6,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {MathHelper} from "./lib/MathHelper.l.sol";
 import {Errors} from "./lib/Errors.l.sol";
+import {Events} from "./lib/Events.l.sol";
 
-contract AMM is ERC20 {
+contract CauseFiPair is ERC20 {
     //
     IERC20 private token0;
     IERC20 private token1;
@@ -54,6 +55,14 @@ contract AMM is ERC20 {
 
         _addReserve(address(token0), _token0Amount);
         _addReserve(address(token1), _token1Amount);
+
+        emit Events.LiquidityAdded(
+            address(token0),
+            _token0Amount,
+            address(token1),
+            _token1Amount,
+            clpMinted
+        );
     }
 
     function removeLiquidity(
@@ -73,6 +82,14 @@ contract AMM is ERC20 {
 
         _transferToken(address(token0), msg.sender, token0Amount);
         _transferToken(address(token1), msg.sender, token1Amount);
+
+        emit Events.LiquidityRemoved(
+            address(token0),
+            token0Amount,
+            address(token1),
+            token1Amount,
+            _clpAmount
+        );
     }
 
     function swap(
@@ -107,6 +124,13 @@ contract AMM is ERC20 {
         isToken0
             ? _removeReserve(address(token1), amountOut)
             : _removeReserve(address(token0), amountOut);
+
+        emit Events.TokenSwapped(
+            address(tokenIn),
+            _amount,
+            address(tokenOut),
+            amountOut
+        );
     }
 
     function _transferToken(
