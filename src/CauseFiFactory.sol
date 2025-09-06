@@ -5,9 +5,11 @@ pragma solidity ^0.8.29;
 import {CauseFiPair} from "./CauseFiPair.sol";
 import {Errors} from "./lib/Errors.l.sol";
 import {Events} from "./lib/Events.l.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract CauseFiFactory {
-    mapping(address => mapping(address => address)) private s_pairs;
+contract CauseFiFactory is Ownable {
+    //
+    mapping(address => mapping(address => address)) private s_pair;
     address[] private s_pairAddresses;
 
     modifier onlyValidToken(address _token0, address _token1) {
@@ -15,19 +17,32 @@ contract CauseFiFactory {
         _;
     }
 
+    constructor(address _owner) Ownable(_owner) {}
+
     function createPair(
         address _token0,
         address _token1
-    ) external onlyValidToken(_token0, _token1) {
+    ) external onlyOwner onlyValidToken(_token0, _token1) {
         CauseFiPair pair = new CauseFiPair(_token0, _token1);
 
         address pairAddress = address(pair);
         s_pairAddresses.push(pairAddress);
 
-        s_pairs[_token0][_token1] = pairAddress;
-        s_pairs[_token1][_token0] = pairAddress;
+        s_pair[_token0][_token1] = pairAddress;
+        s_pair[_token1][_token0] = pairAddress;
 
         emit Events.PairCreated(pairAddress);
+    }
+
+    function getTokenPair(
+        address _token0,
+        address _token1
+    ) external view onlyValidToken(_token0, _token1) returns (address) {
+        return s_pair[_token0][_token1];
+    }
+
+    function getPairAddresses() external view returns (address[] memory) {
+        return s_pairAddresses;
     }
 
     function _validateTokenInput(
@@ -41,4 +56,5 @@ contract CauseFiFactory {
             Errors.InvalidToken()
         );
     }
+    //
 }
