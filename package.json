@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@layerzerolabs/oapp-evm": "^0.3.2"
+  }
+}

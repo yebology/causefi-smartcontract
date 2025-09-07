@@ -8,7 +8,7 @@ import {ICauseFiPair} from "./CauseFiPair.sol";
 
 contract CauseFiRouter {
     //
-    CauseFiFactory s_factory;
+    CauseFiFactory private s_factory;
 
     constructor() {
         s_factory = new CauseFiFactory(msg.sender);
