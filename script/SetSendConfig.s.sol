@@ -1,0 +1,64 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.29;
+
+import {Script} from "forge-std/Script.sol";
+import {ILayerZeroEndpointV2} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
+import {SetConfigParam} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/IMessageLibManager.sol";
+import {UlnConfig} from "@layerzerolabs/lz-evm-messagelib-v2/contracts/uln/UlnBase.sol";
+import {ExecutorConfig} from "@layerzerolabs/lz-evm-messagelib-v2/contracts/SendLibBase.sol";
+
+/// @title LayerZero Send Configuration Script (A → B)
+/// @notice Defines and applies ULN (DVN) + Executor configs for cross‑chain messages sent from Chain A to Chain B via LayerZero Endpoint V2.
+contract SetSendConfig is Script {
+    uint32 constant EXECUTOR_CONFIG_TYPE = 1;
+    uint32 constant ULN_CONFIG_TYPE = 2;
+
+    /// @notice Broadcasts transactions to set both Send ULN and Executor configurations for messages sent from Chain A to Chain B
+    function run(
+        string memory _sourceEndpointAddress,
+        string memory _oftAddress,
+        string memory _remoteEid,
+        string memory _sendLibAddress,
+        string memory _signer,
+        address[] memory _requiredDvns,
+        address[] memory _optionalDvns,
+        address _executorAddress
+    ) external {
+        address endpoint = vm.envAddress(_sourceEndpointAddress); // Chain A Endpoint
+        address oft = vm.envAddress(_oftAddress); // OFT on Chain A
+        uint32 eid = uint32(vm.envUint(_remoteEid)); // Endpoint ID for Chain B
+        address sendLib = vm.envAddress(_sendLibAddress); // SendLib for A → B
+        address signer = vm.envAddress(_signer);
+
+        /// @notice ULNConfig defines security parameters (DVNs + confirmation threshold) for A → B
+        /// @notice Send config requests these settings to be applied to the DVNs and Executor for messages sent from A to B
+        /// @dev 0 values will be interpretted as defaults, so to apply NIL settings, use:
+        /// @dev uint8 internal constant NIL_DVN_COUNT = type(uint8).max;
+        /// @dev uint64 internal constant NIL_CONFIRMATIONS = type(uint64).max;
+        UlnConfig memory uln = UlnConfig({
+            confirmations: 15, // minimum block confirmations required on A before sending to B
+            requiredDVNCount: 2, // number of DVNs required
+            optionalDVNCount: type(uint8).max, // optional DVNs count, uint8
+            optionalDVNThreshold: 0, // optional DVN threshold
+            requiredDVNs: _requiredDvns, // sorted list of required DVN addresses
+            optionalDVNs: _optionalDvns // sorted list of optional DVNs
+        });
+
+        /// @notice ExecutorConfig sets message size limit + fee‑paying executor for A → B
+        ExecutorConfig memory exec = ExecutorConfig({
+            maxMessageSize: 10000, // max bytes per cross-chain message
+            executor: _executorAddress // address that pays destination execution fees on B
+        });
+
+        bytes memory encodedUln = abi.encode(uln);
+        bytes memory encodedExec = abi.encode(exec);
+
+        SetConfigParam[] memory params = new SetConfigParam[](2);
+        params[0] = SetConfigParam(eid, EXECUTOR_CONFIG_TYPE, encodedExec);
+        params[1] = SetConfigParam(eid, ULN_CONFIG_TYPE, encodedUln);
+
+        vm.startBroadcast(signer);
+        ILayerZeroEndpointV2(endpoint).setConfig(oft, sendLib, params); // Set config for messages sent from A to B
+        vm.stopBroadcast();
+    }
+}

@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.22;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.29;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { OFT } from "@layerzerolabs/oft-evm/contracts/OFT.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {OFT} from "@layerzerolabs/oft-evm/contracts/OFT.sol";
 
 /// @notice OFT is an ERC-20 token that extends the OFTCore contract.
 contract CauseFiOFT is OFT {
