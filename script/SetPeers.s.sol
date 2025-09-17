@@ -2,13 +2,12 @@
 pragma solidity ^0.8.29;
 
 import {Script} from "forge-std/Script.sol";
-import {CauseFiOFT} from "../src/CauseFiOFT.sol";
 
 /// @title LayerZero OApp Peer Configuration Script
 /// @notice Sets up peer connections between OApp deployments on different chains
 contract SetPeers is Script {
     function run(
-        string memory _oftAddress,
+        string memory _oappAddr,
         string memory _signer,
         string memory _chain1Eid,
         string memory _chain1Peer,
@@ -18,7 +17,7 @@ contract SetPeers is Script {
         string memory _chain3Peer
     ) external {
         // Load environment variables
-        address oft = vm.envAddress(_oftAddress); // Your OFT contract address
+        address oapp = vm.envAddress(_oappAddr); // Your OApp contract address
         address signer = vm.envAddress(_signer); // Address with owner permissions
 
         // Example: Set peers for different chains
@@ -39,9 +38,9 @@ contract SetPeers is Script {
         vm.startBroadcast(signer);
 
         // Set peers for each chain
-        CauseFiOFT(oft).setPeer(eid1, peer1);
-        CauseFiOFT(oft).setPeer(eid2, peer2);
-        CauseFiOFT(oft).setPeer(eid3, peer3);
+        // CauseFiOFT(oapp).setPeer(eid1, peer1);
+        // CauseFiOFT(oapp).setPeer(eid2, peer2);
+        // CauseFiOFT(oapp).setPeer(eid3, peer3);
 
         vm.stopBroadcast();
     }

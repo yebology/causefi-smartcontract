@@ -12,18 +12,18 @@ contract SetReceiveConfig is Script {
     uint32 constant RECEIVE_CONFIG_TYPE = 2;
 
     function run(
-        string memory _destinationEndpointAddress,
-        string memory _oftAddress,
+        string memory _dstEndpointAddr,
+        string memory _oappAddr,
         string memory _remoteEid,
-        string memory _receiveLibAddress,
+        string memory _receiveLibAddr,
         string memory _signer,
         address[] memory _requiredDvns,
         address[] memory _optionalDvns
     ) external {
-        address endpoint = vm.envAddress(_destinationEndpointAddress); // Chain B Endpoint
-        address oft = vm.envAddress(_oftAddress); // OApp on Chain B
+        address endpoint = vm.envAddress(_dstEndpointAddr); // Chain B Endpoint
+        address oapp = vm.envAddress(_oappAddr); // OApp on Chain B
         uint32 eid = uint32(vm.envUint(_remoteEid)); // Endpoint ID for Chain A
-        address receiveLib = vm.envAddress(_receiveLibAddress); // ReceiveLib for B ← A
+        address receiveLib = vm.envAddress(_receiveLibAddr); // ReceiveLib for B ← A
         address signer = vm.envAddress(_signer);
 
         /// @notice UlnConfig controls verification threshold for incoming messages from A to B
@@ -46,7 +46,7 @@ contract SetReceiveConfig is Script {
         params[0] = SetConfigParam(eid, RECEIVE_CONFIG_TYPE, encodedUln);
 
         vm.startBroadcast(signer);
-        ILayerZeroEndpointV2(endpoint).setConfig(oft, receiveLib, params); // Set config for messages received on B from A
+        ILayerZeroEndpointV2(endpoint).setConfig(oapp, receiveLib, params); // Set config for messages received on B from A
         vm.stopBroadcast();
     }
 }

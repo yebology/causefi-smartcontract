@@ -3,9 +3,10 @@
 pragma solidity ^0.8.29;
 
 import {CauseFiPair} from "./CauseFiPair.sol";
-import {Errors} from "./lib/Errors.l.sol";
-import {Events} from "./lib/Events.l.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Errors} from "../../lib/Errors.l.sol";
+import {Events} from "../../lib/Events.l.sol";
+import {ACauseFiToken} from "../../abstract/ACauseFiToken.a.sol";
 
 contract CauseFiFactory is Ownable {
     //
@@ -21,9 +22,10 @@ contract CauseFiFactory is Ownable {
 
     function createPair(
         address _token0,
-        address _token1
+        address _token1,
+        address _clp
     ) external onlyOwner onlyValidToken(_token0, _token1) {
-        CauseFiPair pair = new CauseFiPair(_token0, _token1);
+        CauseFiPair pair = new CauseFiPair(_token0, _token1, _clp);
 
         address pairAddress = address(pair);
         s_pairAddresses.push(pairAddress);

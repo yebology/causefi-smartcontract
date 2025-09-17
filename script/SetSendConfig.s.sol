@@ -15,19 +15,19 @@ contract SetSendConfig is Script {
 
     /// @notice Broadcasts transactions to set both Send ULN and Executor configurations for messages sent from Chain A to Chain B
     function run(
-        string memory _sourceEndpointAddress,
-        string memory _oftAddress,
+        string memory _srcEndpointAddr,
+        string memory _oappAddr,
         string memory _remoteEid,
-        string memory _sendLibAddress,
+        string memory _sendLibAddr,
         string memory _signer,
         address[] memory _requiredDvns,
         address[] memory _optionalDvns,
         address _executorAddress
     ) external {
-        address endpoint = vm.envAddress(_sourceEndpointAddress); // Chain A Endpoint
-        address oft = vm.envAddress(_oftAddress); // OFT on Chain A
+        address endpoint = vm.envAddress(_srcEndpointAddr); // Chain A Endpoint
+        address oapp = vm.envAddress(_oappAddr); // OApp on Chain A
         uint32 eid = uint32(vm.envUint(_remoteEid)); // Endpoint ID for Chain B
-        address sendLib = vm.envAddress(_sendLibAddress); // SendLib for A → B
+        address sendLib = vm.envAddress(_sendLibAddr); // SendLib for A → B
         address signer = vm.envAddress(_signer);
 
         /// @notice ULNConfig defines security parameters (DVNs + confirmation threshold) for A → B
@@ -58,7 +58,7 @@ contract SetSendConfig is Script {
         params[1] = SetConfigParam(eid, ULN_CONFIG_TYPE, encodedUln);
 
         vm.startBroadcast(signer);
-        ILayerZeroEndpointV2(endpoint).setConfig(oft, sendLib, params); // Set config for messages sent from A to B
+        ILayerZeroEndpointV2(endpoint).setConfig(oapp, sendLib, params); // Set config for messages sent from A to B
         vm.stopBroadcast();
     }
 }

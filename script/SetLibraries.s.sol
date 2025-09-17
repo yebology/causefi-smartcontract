@@ -12,41 +12,41 @@ import {ILayerZeroEndpointV2} from "@layerzerolabs/lz-evm-protocol-v2/contracts/
 contract SetLibraries is Script {
     /// @notice Runs the LayerZero library configuration
     function run(
-        string memory _endpointAddress,
-        string memory _oftAddress,
+        string memory _endpointAddr,
+        string memory _oappAddr,
         string memory _signer,
-        string memory _sendLibAddress,
-        string memory _receiveLibAddress,
-        string memory _destinationEid,
-        string memory _sourceEid,
+        string memory _sendLibAddr,
+        string memory _receiveLibAddr,
+        string memory _dstEid,
+        string memory _srcEid,
         string memory _gracePeriod
     ) external {
         // Load environment variables
-        address endpoint = vm.envAddress(_endpointAddress); // LayerZero Endpoint
-        address oft = vm.envAddress(_oftAddress); //  OFT contract
+        address endpoint = vm.envAddress(_endpointAddr); // LayerZero Endpoint
+        address oapp = vm.envAddress(_oappAddr); //  OApp contract
         address signer = vm.envAddress(_signer); // Admin wallet
 
         // Library addresses
-        address sendLib = vm.envAddress(_sendLibAddress); // SendUln302
-        address receiveLib = vm.envAddress(_receiveLibAddress); // ReceiveUln302
+        address sendLib = vm.envAddress(_sendLibAddr); // SendUln302
+        address receiveLib = vm.envAddress(_receiveLibAddr); // ReceiveUln302
 
         // Chain configurations
-        uint32 dstEid = uint32(vm.envUint(_destinationEid)); // Destination chain EID
-        uint32 srcEid = uint32(vm.envUint(_sourceEid)); // Source chain EID
+        uint32 dstEid = uint32(vm.envUint(_dstEid)); // Destination chain EID
+        uint32 srcEid = uint32(vm.envUint(_srcEid)); // Source chain EID
         uint32 gracePeriod = uint32(vm.envUint(_gracePeriod)); // Grace period in seconds
 
         vm.startBroadcast(signer);
 
         // Set send library for outbound messages
         ILayerZeroEndpointV2(endpoint).setSendLibrary(
-            oft, // your OFT contract
+            oapp, // your OApp contract
             dstEid, // destination chain EID
             sendLib // SendUln302 address
         );
 
         // Set receive library for outbound messages
         ILayerZeroEndpointV2(endpoint).setReceiveLibrary(
-            oft, // your OFT contract
+            oapp, // your OApp contract
             srcEid, // source chain EID
             receiveLib, // ReceiveUln302 address
             gracePeriod // grace period for switching libraries
