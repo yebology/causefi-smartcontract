@@ -23,9 +23,9 @@ contract CauseFiFactory is Ownable {
     function createPair(
         address _token0,
         address _token1,
-        address _clp
+        address _bank
     ) external onlyOwner onlyValidToken(_token0, _token1) {
-        CauseFiPair pair = new CauseFiPair(_token0, _token1, _clp);
+        CauseFiPair pair = new CauseFiPair(_token0, _token1, _bank);
 
         address pairAddress = address(pair);
         s_pairAddresses.push(pairAddress);

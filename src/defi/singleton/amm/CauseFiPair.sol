@@ -7,15 +7,14 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {MathHelper} from "../../lib/MathHelper.l.sol";
 import {Errors} from "../../lib/Errors.l.sol";
 import {Events} from "../../lib/Events.l.sol";
-import {ICauseFiPair} from "../../interface/ICauseFiPair.i.sol";
-import {CLP} from "../../token/CLP.sol";
 import {ACauseFiToken} from "../../abstract/ACauseFiToken.a.sol";
+import {CauseFiBank} from "../core/CauseFiBank.sol";
 
-contract CauseFiPair is ICauseFiPair {
+contract CauseFiPair {
     //
     ACauseFiToken private _token0;
     ACauseFiToken private _token1;
-    CLP private _clp;
+    CauseFiBank private _bank;
 
     uint256 private _reserve0;
     uint256 private _reserve1;
@@ -32,23 +31,20 @@ contract CauseFiPair is ICauseFiPair {
         _;
     }
 
-    constructor(address _token0Addr, address _token1Addr, address _clpAddr) {
+    constructor(address _token0Addr, address _token1Addr, address _bankAddr) {
         _token0 = ACauseFiToken(_token0Addr);
         _token1 = ACauseFiToken(_token1Addr);
-        _clp = CLP(_clpAddr);
+        _bank = CauseFiBank(_bankAddr);
     }
 
     function addLiquidity(
         uint256 _token0Amount,
-        uint256 _token1Amount,
-        address _caller
-    ) external override returns (uint256 clpMinted) {
+        uint256 _token1Amount
+    ) external returns (uint256 clpMinted) {
         ACauseFiToken(_token0).mint(address(this), _token0Amount);
         ACauseFiToken(_token1).mint(address(this), _token1Amount);
 
         clpMinted = _getCLPMinted(_token0Amount, _token1Amount);
-
-        _clp.mint(_caller, clpMinted);
 
         _addReserve(address(_token0), _token0Amount);
         _addReserve(address(_token1), _token1Amount);
@@ -67,14 +63,11 @@ contract CauseFiPair is ICauseFiPair {
         address _caller
     )
         external
-        override
         checkCLPBalance(msg.sender, _clpAmount)
         returns (uint256 token0Amount, uint256 token1Amount)
     {
         token0Amount = _calculateRemoveAmount(_clpAmount, _reserve0);
         token1Amount = _calculateRemoveAmount(_clpAmount, _reserve1);
-
-        _clp.burn(_caller, _clpAmount);
 
         _removeReserve(address(_token0), token0Amount);
         _removeReserve(address(_token1), token1Amount);
@@ -94,7 +87,7 @@ contract CauseFiPair is ICauseFiPair {
     function swap(
         address _token,
         uint256 _amount
-    ) external override onlyPoolToken(_token) returns (uint256 amountOut) {
+    ) external onlyPoolToken(_token) returns (uint256 amountOut) {
         bool isToken0 = _checkTokenAddress(_token, address(_token0));
         (
             IERC20 tokenIn,
@@ -169,22 +162,19 @@ contract CauseFiPair is ICauseFiPair {
         uint256 _clpAmount,
         uint256 _reserveAmount
     ) private view returns (uint256) {
-        return 1;
-        // return (_clpAmount * _reserveAmount) / totalSupply();
+        return (_clpAmount * _reserveAmount) / _getTotalSupply();
     }
 
     function _getCLPMinted(
         uint256 _token0Amount,
         uint256 _token1Amount
     ) private view returns (uint256) {
-        uint256 totalSupply = CLP(_clp).totalSupply();
-
         return
-            totalSupply == 0
+            _getTotalSupply() == 0
                 ? MathHelper.sqrt(_token0Amount * _token1Amount)
                 : MathHelper.min(
-                    ((_token0Amount * totalSupply) / _reserve0),
-                    ((_token1Amount * totalSupply) / _reserve1)
+                    ((_token0Amount * _getTotalSupply()) / _reserve0),
+                    ((_token1Amount * _getTotalSupply()) / _reserve1)
                 );
     }
 
@@ -200,6 +190,10 @@ contract CauseFiPair is ICauseFiPair {
         uint256 _reserveOut
     ) private pure returns (uint256) {
         return (_reserveOut * _amount) / (_reserveIn + _amount);
+    }
+
+    function _getTotalSupply() private view returns (uint256) {
+        return _bank.totalSupply(address(this));
     }
 
     function _checkTokenAddress(

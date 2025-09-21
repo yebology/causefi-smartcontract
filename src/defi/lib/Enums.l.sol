@@ -6,6 +6,7 @@ library Enums {
     enum Message {
         ADD_LIQUIDITY,
         REMOVE_LIQUIDITY,
-        SWAP
+        SWAP,
+        SEND_CLP
     }
 }

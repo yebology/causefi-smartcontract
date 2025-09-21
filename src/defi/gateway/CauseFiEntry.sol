@@ -8,15 +8,21 @@ import {OAppOptionsType3} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OApp
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Enums} from "../lib/Enums.l.sol";
 import {BaseToken} from "../token/BaseToken.sol";
-import {ACauseFiToken} from "../abstract/ACauseFiToken.a.sol";
+import {WrappedCLP} from "../token/WrappedCLP.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {CauseFiCLPManager} from "./CauseFiCLPManager.sol";
 
 contract CauseFiEntry is ReentrancyGuard, OApp, OAppOptionsType3 {
     //
+    CauseFiCLPManager private _clpManager;
+
     constructor(
         address _endpoint,
-        address _owner
-    ) OApp(_endpoint, _owner) Ownable(_owner) {}
+        address _owner,
+        address __clpManager
+    ) OApp(_endpoint, _owner) Ownable(_owner) {
+        _clpManager = CauseFiCLPManager(__clpManager);
+    }
 
     function quoteSendMsg(
         uint32 _dstEid,
@@ -35,24 +41,25 @@ contract CauseFiEntry is ReentrancyGuard, OApp, OAppOptionsType3 {
     }
 
     function addLiquidity(
-        address _token0Src,
-        address _token1Src,
-        address _token0Dst,
-        address _token1Dst,
+        address _token0,
+        address _token1,
         uint256 _token0Amount,
         uint256 _token1Amount,
+        uint32 _srcEid,
         uint32 _dstEid,
         bytes calldata _options
     ) external payable nonReentrant returns (MessagingReceipt memory) {
-        ACauseFiToken(_token0Src).burn(msg.sender, _token0Amount);
-        ACauseFiToken(_token1Src).burn(msg.sender, _token1Amount);
+        BaseToken(_token0).burn(msg.sender, _token0Amount);
+        BaseToken(_token1).burn(msg.sender, _token1Amount);
 
         bytes memory _message = abi.encode(
-            _token0Dst,
-            _token1Dst,
+            uint16(Enums.Message.ADD_LIQUIDITY),
+            _token0,
+            _token1,
             _token0Amount,
             _token1Amount,
-            msg.sender
+            msg.sender,
+            _srcEid
         );
 
         return
@@ -118,12 +125,35 @@ contract CauseFiEntry is ReentrancyGuard, OApp, OAppOptionsType3 {
     }
 
     function _lzReceive(
-        Origin calldata _origin,
+        Origin calldata /*_origin*/,
         bytes32 /*guid*/,
-        bytes calldata message,
+        bytes calldata _message,
         address, // Executor address as specified by the OApp.
         bytes calldata // Any extra data or options to trigger on receipt.
-    ) internal pure override {}
+    ) internal override {
+        (uint16 msgType, bytes memory payload) = abi.decode(
+            _message,
+            (uint16, bytes)
+        );
 
+        if (msgType == uint16(Enums.Message.ADD_LIQUIDITY)) {
+            (
+                address token0,
+                address token1,
+                address recipient,
+                uint256 clpAmount
+            ) = abi.decode(payload, (address, address, address, uint256));
+            _receiveAddLiquidity(token0, token1, recipient, clpAmount);
+        }
+    }
+
+    function _receiveAddLiquidity(
+        address _token0,
+        address _token1,
+        address _recipient,
+        uint256 _clpAmount
+    ) private {
+        _clpManager.mint(_token0, _token1, _recipient, _clpAmount);
+    }
     //
 }

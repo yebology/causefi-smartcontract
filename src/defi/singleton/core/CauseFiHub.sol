@@ -4,24 +4,31 @@ pragma solidity ^0.8.29;
 
 import {CauseFiFactory} from "../amm/CauseFiFactory.sol";
 import {CauseFiPair} from "../amm/CauseFiPair.sol";
-import {ICauseFiPair} from "../../interface/ICauseFiPair.i.sol";
 import {OApp, Origin, MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {OAppOptionsType3} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OAppOptionsType3.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Enums} from "../../lib/Enums.l.sol";
-import {ICauseFiRegistry} from "../../interface/ICauseFiRegistry.i.sol";
+import {CauseFiBank} from "../core/CauseFiBank.sol";
+import {CauseFiTokenRegistry} from "./CauseFiTokenRegistry.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 
-contract CauseFiHub is OApp, OAppOptionsType3 {
+contract CauseFiHub is OApp, OAppOptionsType3, ReentrancyGuard {
     //
     CauseFiFactory private _factory;
-    ICauseFiRegistry private _registry;
+    CauseFiBank private _bank;
+    CauseFiTokenRegistry private _registry;
+
+    bytes private constant EMPTY_OPTIONS = "";
 
     constructor(
         address _endpoint,
-        address _owner
+        address _owner,
+        address _tokenRegistry
     ) OApp(_endpoint, _owner) Ownable(_owner) {
-        _factory = new CauseFiFactory(msg.sender);
-        _registry = ICauseFiRegistry(_owner);
+        _factory = new CauseFiFactory(_owner);
+        _bank = new CauseFiBank(_owner);
+        _registry = CauseFiTokenRegistry(_tokenRegistry);
     }
 
     function quoteSendMsg(
@@ -54,21 +61,23 @@ contract CauseFiHub is OApp, OAppOptionsType3 {
 
         if (msgType == uint16(Enums.Message.ADD_LIQUIDITY)) {
             (
-                address token0,
-                address token1,
+                address token0Remote,
+                address token1Remote,
                 uint256 token0Amount,
                 uint256 token1Amount,
-                address caller
+                address recipient,
+                uint32 remoteEid
             ) = abi.decode(
                     payload,
-                    (address, address, uint256, uint256, address)
+                    (address, address, uint256, uint256, address, uint32)
                 );
             _receiveAddLiquidity(
-                token0,
-                token1,
+                token0Remote,
+                token1Remote,
                 token0Amount,
                 token1Amount,
-                caller
+                recipient,
+                remoteEid
             );
         } else if (msgType == uint16(Enums.Message.REMOVE_LIQUIDITY)) {
             (
@@ -90,18 +99,39 @@ contract CauseFiHub is OApp, OAppOptionsType3 {
     }
 
     function _receiveAddLiquidity(
-        address _token0,
-        address _token1,
+        address _token0Remote,
+        address _token1Remote,
         uint256 _token0Amount,
         uint256 _token1Amount,
-        address _caller
-    ) private {
-        address pair = _getTokenPair(_token0, _token1);
+        address _recipient,
+        uint32 _remoteEid
+    ) private nonReentrant {
+        address token0Local = _getLocalToken(_remoteEid, _token0Remote);
+        address token1Local = _getLocalToken(_remoteEid, _token1Remote);
 
-        uint256 clpMinted = ICauseFiPair(pair).addLiquidity(
+        address pair = _getTokenPair(token0Local, token1Local);
+
+        uint256 clpMinted = CauseFiPair(pair).addLiquidity(
             _token0Amount,
-            _token1Amount,
-            _caller
+            _token1Amount
+        );
+
+        _bank.lock(pair, clpMinted);
+
+        bytes memory _message = abi.encode(
+            uint16(Enums.Message.ADD_LIQUIDITY),
+            _token0Remote,
+            _token1Remote,
+            _recipient,
+            clpMinted
+        );
+
+        _lzSend(
+            _remoteEid,
+            _message,
+            EMPTY_OPTIONS,
+            MessagingFee(msg.value, 0),
+            payable(msg.sender)
         );
     }
 
@@ -113,7 +143,7 @@ contract CauseFiHub is OApp, OAppOptionsType3 {
     ) private {
         address pair = _getTokenPair(_token0, _token1);
 
-        (uint256 token0Amount, uint256 token1Amount) = ICauseFiPair(pair)
+        (uint256 token0Amount, uint256 token1Amount) = CauseFiPair(pair)
             .removeLiquidity(_clpAmount, _caller);
     }
 
@@ -125,7 +155,14 @@ contract CauseFiHub is OApp, OAppOptionsType3 {
     ) private {
         address pair = _getTokenPair(_token0, _token1);
 
-        uint256 amountOut = ICauseFiPair(pair).swap(_tokenToSwap, _amount);
+        uint256 amountOut = CauseFiPair(pair).swap(_tokenToSwap, _amount);
+    }
+
+    function _getLocalToken(
+        uint256 _remoteEid,
+        address _remoteToken
+    ) private view returns (address) {
+        return _registry.getLocalToken(_remoteEid, _remoteToken);
     }
 
     function _getTokenPair(
