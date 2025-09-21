@@ -8,23 +8,19 @@ import {MathHelper} from "../../lib/MathHelper.l.sol";
 import {Errors} from "../../lib/Errors.l.sol";
 import {Events} from "../../lib/Events.l.sol";
 import {ACauseFiToken} from "../../abstract/ACauseFiToken.a.sol";
-import {CauseFiBank} from "../core/CauseFiBank.sol";
+import {CauseFiCLPManager} from "../core/CauseFiCLPManager.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract CauseFiPair {
+contract CauseFiPair is ReentrancyGuard {
     //
     ACauseFiToken private _token0;
     ACauseFiToken private _token1;
-    CauseFiBank private _bank;
+    CauseFiCLPManager private _clpManager;
 
     uint256 private _reserve0;
     uint256 private _reserve1;
 
     uint256 private constant FEE_PERCENT = 3; // 0.3%
-
-    modifier checkCLPBalance(address _user, uint256 _expectedBalance) {
-        _validateCLPBalance(_user, _expectedBalance);
-        _;
-    }
 
     modifier onlyPoolToken(address _token) {
         _validateTokenInput(_token);
@@ -34,20 +30,22 @@ contract CauseFiPair {
     constructor(address _token0Addr, address _token1Addr, address _bankAddr) {
         _token0 = ACauseFiToken(_token0Addr);
         _token1 = ACauseFiToken(_token1Addr);
-        _bank = CauseFiBank(_bankAddr);
+        _clpManager = CauseFiCLPManager(_bankAddr);
     }
 
     function addLiquidity(
         uint256 _token0Amount,
         uint256 _token1Amount
-    ) external returns (uint256 clpMinted) {
-        ACauseFiToken(_token0).mint(address(this), _token0Amount);
-        ACauseFiToken(_token1).mint(address(this), _token1Amount);
-
+    ) external nonReentrant returns (uint256 clpMinted) {
         clpMinted = _getCLPMinted(_token0Amount, _token1Amount);
 
         _addReserve(address(_token0), _token0Amount);
         _addReserve(address(_token1), _token1Amount);
+
+        ACauseFiToken(_token0).mint(address(this), _token0Amount);
+        ACauseFiToken(_token1).mint(address(this), _token1Amount);
+
+        _clpManager.lock(address(this), clpMinted);
 
         emit Events.LiquidityAdded(
             address(_token0),
@@ -59,21 +57,22 @@ contract CauseFiPair {
     }
 
     function removeLiquidity(
-        uint256 _clpAmount,
-        address _caller
+        uint256 _clpAmount
     )
         external
-        checkCLPBalance(msg.sender, _clpAmount)
+        nonReentrant
         returns (uint256 token0Amount, uint256 token1Amount)
     {
         token0Amount = _calculateRemoveAmount(_clpAmount, _reserve0);
         token1Amount = _calculateRemoveAmount(_clpAmount, _reserve1);
 
+        _clpManager.release(address(this), _clpAmount);
+
         _removeReserve(address(_token0), token0Amount);
         _removeReserve(address(_token1), token1Amount);
 
-        _transferToken(address(_token0), msg.sender, token0Amount);
-        _transferToken(address(_token1), msg.sender, token1Amount);
+        ACauseFiToken(_token0).burn(address(this), token0Amount);
+        ACauseFiToken(_token1).burn(address(this), token1Amount);
 
         emit Events.LiquidityRemoved(
             address(_token0),
@@ -87,7 +86,7 @@ contract CauseFiPair {
     function swap(
         address _token,
         uint256 _amount
-    ) external onlyPoolToken(_token) returns (uint256 amountOut) {
+    ) external nonReentrant onlyPoolToken(_token) returns (uint256, address) {
         bool isToken0 = _checkTokenAddress(_token, address(_token0));
         (
             IERC20 tokenIn,
@@ -98,17 +97,12 @@ contract CauseFiPair {
                 ? (_token0, _token1, _reserve0, _reserve1)
                 : (_token1, _token0, _reserve1, _reserve0);
 
-        // _transferTokenFrom(
-        //     address(tokenIn),
-        //     msg.sender,
-        //     address(this),
-        //     _amount
-        // );
-
         uint256 amountInWithFee = _getAmountInWithFee(_amount);
-        amountOut = _getAmountOut(amountInWithFee, reserveIn, reserveOut);
-
-        _transferToken(address(tokenOut), msg.sender, amountOut);
+        uint256 amountOut = _getAmountOut(
+            amountInWithFee,
+            reserveIn,
+            reserveOut
+        );
 
         isToken0
             ? _addReserve(address(_token0), _amount)
@@ -117,34 +111,18 @@ contract CauseFiPair {
             ? _removeReserve(address(_token1), amountOut)
             : _removeReserve(address(_token0), amountOut);
 
+        ACauseFiToken(address(tokenIn)).mint(address(this), _amount);
+        ACauseFiToken(address(tokenOut)).burn(address(this), amountOut);
+
         emit Events.TokenSwapped(
             address(tokenIn),
             _amount,
             address(tokenOut),
             amountOut
         );
-    }
 
-    function _transferToken(
-        address _token,
-        address _recipient,
-        uint256 _amount
-    ) private {
-        _checkTokenAddress(_token, address(_token0))
-            ? _token0.transfer(_recipient, _amount)
-            : _token1.transfer(_recipient, _amount);
+        return (amountOut, address(tokenIn));
     }
-
-    // function _transferTokenFrom(
-    //     address _token,
-    //     address _caller,
-    //     address _recipient,
-    //     uint256 _amount
-    // ) private {
-    //     _checkTokenAddress(_token, address(_token0))
-    //         ? _token0.transferFrom(_caller, _recipient, _amount)
-    //         : _token1.transferFrom(_caller, _recipient, _amount);
-    // }
 
     function _addReserve(address _token, uint256 _amount) private {
         _checkTokenAddress(_token, address(_token0))
@@ -193,7 +171,7 @@ contract CauseFiPair {
     }
 
     function _getTotalSupply() private view returns (uint256) {
-        return _bank.totalSupply(address(this));
+        return _clpManager.totalSupply(address(this));
     }
 
     function _checkTokenAddress(
@@ -203,16 +181,16 @@ contract CauseFiPair {
         return _expectedToken == _actualToken;
     }
 
-    function _validateCLPBalance(
-        address _user,
-        uint256 _expectedBalance
-    ) private view {
-        require(1 >= _expectedBalance, Errors.InsufficientCLPBalance());
-        // require(
-        //     balanceOf(_user) >= _expectedBalance,
-        //     Errors.InsufficientCLPBalance()
-        // );
-    }
+    // function _validateCLPBalance(
+    //     address _user,
+    //     uint256 _expectedBalance
+    // ) private view {
+    //     require(1 >= _expectedBalance, Errors.InsufficientCLPBalance());
+    //     // require(
+    //     //     balanceOf(_user) >= _expectedBalance,
+    //     //     Errors.InsufficientCLPBalance()
+    //     // );
+    // }
 
     function _validateTokenInput(address _token) private view {
         require(

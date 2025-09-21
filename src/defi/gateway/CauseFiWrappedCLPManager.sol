@@ -6,7 +6,7 @@ import {WrappedCLP} from "../token/WrappedCLP.sol";
 import {BaseToken} from "../token/BaseToken.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract CauseFiCLPManager is ReentrancyGuard, Ownable {
+contract CauseFiWrappedCLPManager is ReentrancyGuard, Ownable {
     //
     mapping(bytes => address) private _wrappedCLP;
 
@@ -33,6 +33,16 @@ contract CauseFiCLPManager is ReentrancyGuard, Ownable {
     ) external nonReentrant {
         address wrapped = _getWrappedCLP(_token0, _token1);
         WrappedCLP(wrapped).mint(_recipient, _clpAmount);
+    }
+
+    function burn(
+        address _token0,
+        address _token1,
+        address _account,
+        uint256 _clpAmount
+    ) external {
+        address wrapped = _getWrappedCLP(_token0, _token1);
+        WrappedCLP(wrapped).burn(_account, _clpAmount);
     }
 
     function _getWrappedCLP(

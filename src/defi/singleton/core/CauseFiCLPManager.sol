@@ -6,7 +6,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {CLP} from "../../token/CLP.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract CauseFiBank is Ownable, ReentrancyGuard {
+contract CauseFiCLPManager is Ownable, ReentrancyGuard {
     //
     mapping(address => address) private _pairToCLP;
 

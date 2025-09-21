@@ -8,7 +8,7 @@ import {OApp, Origin, MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oapp
 import {OAppOptionsType3} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OAppOptionsType3.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Enums} from "../../lib/Enums.l.sol";
-import {CauseFiBank} from "../core/CauseFiBank.sol";
+import {CauseFiCLPManager} from "../core/CauseFiCLPManager.sol";
 import {CauseFiTokenRegistry} from "./CauseFiTokenRegistry.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
@@ -16,7 +16,7 @@ import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/inte
 contract CauseFiHub is OApp, OAppOptionsType3, ReentrancyGuard {
     //
     CauseFiFactory private _factory;
-    CauseFiBank private _bank;
+    CauseFiCLPManager private _clpManager;
     CauseFiTokenRegistry private _registry;
 
     bytes private constant EMPTY_OPTIONS = "";
@@ -27,7 +27,7 @@ contract CauseFiHub is OApp, OAppOptionsType3, ReentrancyGuard {
         address _tokenRegistry
     ) OApp(_endpoint, _owner) Ownable(_owner) {
         _factory = new CauseFiFactory(_owner);
-        _bank = new CauseFiBank(_owner);
+        _clpManager = new CauseFiCLPManager(_owner);
         _registry = CauseFiTokenRegistry(_tokenRegistry);
     }
 
@@ -81,20 +81,42 @@ contract CauseFiHub is OApp, OAppOptionsType3, ReentrancyGuard {
             );
         } else if (msgType == uint16(Enums.Message.REMOVE_LIQUIDITY)) {
             (
-                address token0,
-                address token1,
+                address token0Remote,
+                address token1Remote,
+                address recipient,
                 uint256 clpAmount,
-                address caller
-            ) = abi.decode(payload, (address, address, uint256, address));
-            _receiveRemoveLiquidity(token0, token1, clpAmount, caller);
+                uint32 remoteEid
+            ) = abi.decode(
+                    payload,
+                    (address, address, address, uint256, uint32)
+                );
+            _receiveRemoveLiquidity(
+                token0Remote,
+                token1Remote,
+                recipient,
+                clpAmount,
+                remoteEid
+            );
         } else if (msgType == uint16(Enums.Message.SWAP)) {
             (
-                address token0,
-                address token1,
-                address tokenToSwap,
-                uint256 amount
-            ) = abi.decode(payload, (address, address, address, uint256));
-            _receiveSwap(token0, token1, tokenToSwap, amount);
+                address token0Remote,
+                address token1Remote,
+                address tokenToSwapRemote,
+                address recipient,
+                uint256 amount,
+                uint32 remoteEid
+            ) = abi.decode(
+                    payload,
+                    (address, address, address, address, uint256, uint32)
+                );
+            _receiveSwap(
+                token0Remote,
+                token1Remote,
+                tokenToSwapRemote,
+                recipient,
+                amount,
+                remoteEid
+            );
         }
     }
 
@@ -116,8 +138,6 @@ contract CauseFiHub is OApp, OAppOptionsType3, ReentrancyGuard {
             _token1Amount
         );
 
-        _bank.lock(pair, clpMinted);
-
         bytes memory _message = abi.encode(
             uint16(Enums.Message.ADD_LIQUIDITY),
             _token0Remote,
@@ -136,26 +156,76 @@ contract CauseFiHub is OApp, OAppOptionsType3, ReentrancyGuard {
     }
 
     function _receiveRemoveLiquidity(
-        address _token0,
-        address _token1,
+        address _token0Remote,
+        address _token1Remote,
+        address _recipient,
         uint256 _clpAmount,
-        address _caller
+        uint32 _remoteEid
     ) private {
-        address pair = _getTokenPair(_token0, _token1);
+        address token0Local = _getLocalToken(_remoteEid, _token0Remote);
+        address token1Local = _getLocalToken(_remoteEid, _token1Remote);
+
+        address pair = _getTokenPair(token0Local, token1Local);
 
         (uint256 token0Amount, uint256 token1Amount) = CauseFiPair(pair)
-            .removeLiquidity(_clpAmount, _caller);
+            .removeLiquidity(_clpAmount);
+
+        bytes memory _message = abi.encode(
+            uint16(Enums.Message.REMOVE_LIQUIDITY),
+            _token0Remote,
+            _token1Remote,
+            token0Amount,
+            token1Amount,
+            _recipient
+        );
+
+        _lzSend(
+            _remoteEid,
+            _message,
+            EMPTY_OPTIONS,
+            MessagingFee(msg.value, 0),
+            payable(msg.sender)
+        );
     }
 
     function _receiveSwap(
-        address _token0,
-        address _token1,
+        address _token0Remote,
+        address _token1Remote,
         address _tokenToSwap,
-        uint256 _amount
+        address _recipient,
+        uint256 _amount,
+        uint32 _remoteEid
     ) private {
-        address pair = _getTokenPair(_token0, _token1);
+        address token0Local = _getLocalToken(_remoteEid, _token0Remote);
+        address token1Local = _getLocalToken(_remoteEid, _token1Remote);
 
-        uint256 amountOut = CauseFiPair(pair).swap(_tokenToSwap, _amount);
+        address pair = _getTokenPair(token0Local, token1Local);
+
+        (uint256 amountToMint, address tokenToBurn) = CauseFiPair(pair).swap(
+            _tokenToSwap,
+            _amount
+        );
+
+        (address tokenToBurnRemote, address tokenToMintRemote) = tokenToBurn == token0Local
+            ? (_token0Remote, _token1Remote)
+            : (_token1Remote, _token0Remote);
+
+        bytes memory _message = abi.encode(
+            uint16(Enums.Message.SWAP),
+            tokenToBurnRemote,
+            _amount,
+            tokenToMintRemote,
+            amountToMint,
+            _recipient
+        );
+
+        _lzSend(
+            _remoteEid,
+            _message,
+            EMPTY_OPTIONS,
+            MessagingFee(msg.value, 0),
+            payable(msg.sender)
+        );
     }
 
     function _getLocalToken(
