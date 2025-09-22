@@ -8,7 +8,6 @@ import {OApp, Origin, MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oapp
 import {OAppOptionsType3} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OAppOptionsType3.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Enums} from "../../lib/Enums.l.sol";
-import {CauseFiCLPManager} from "../core/CauseFiCLPManager.sol";
 import {CauseFiTokenRegistry} from "./CauseFiTokenRegistry.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
@@ -16,7 +15,6 @@ import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/inte
 contract CauseFiHub is OApp, OAppOptionsType3, ReentrancyGuard {
     //
     CauseFiFactory private _factory;
-    CauseFiCLPManager private _clpManager;
     CauseFiTokenRegistry private _registry;
 
     bytes private constant EMPTY_OPTIONS = "";
@@ -27,7 +25,6 @@ contract CauseFiHub is OApp, OAppOptionsType3, ReentrancyGuard {
         address _tokenRegistry
     ) OApp(_endpoint, _owner) Ownable(_owner) {
         _factory = new CauseFiFactory(_owner);
-        _clpManager = new CauseFiCLPManager(_owner);
         _registry = CauseFiTokenRegistry(_tokenRegistry);
     }
 
@@ -206,7 +203,8 @@ contract CauseFiHub is OApp, OAppOptionsType3, ReentrancyGuard {
             _amount
         );
 
-        (address tokenToBurnRemote, address tokenToMintRemote) = tokenToBurn == token0Local
+        (address tokenToBurnRemote, address tokenToMintRemote) = tokenToBurn ==
+            token0Local
             ? (_token0Remote, _token1Remote)
             : (_token1Remote, _token0Remote);
 
@@ -229,7 +227,7 @@ contract CauseFiHub is OApp, OAppOptionsType3, ReentrancyGuard {
     }
 
     function _getLocalToken(
-        uint256 _remoteEid,
+        uint32 _remoteEid,
         address _remoteToken
     ) private view returns (address) {
         return _registry.getLocalToken(_remoteEid, _remoteToken);

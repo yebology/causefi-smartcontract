@@ -7,14 +7,15 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {MathHelper} from "../../lib/MathHelper.l.sol";
 import {Errors} from "../../lib/Errors.l.sol";
 import {Events} from "../../lib/Events.l.sol";
-import {ACauseFiToken} from "../../abstract/ACauseFiToken.a.sol";
 import {CauseFiCLPManager} from "../core/CauseFiCLPManager.sol";
+import {OriginToken} from "../../token/OriginToken.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {console} from "forge-std/console.sol";
 
 contract CauseFiPair is ReentrancyGuard {
     //
-    ACauseFiToken private _token0;
-    ACauseFiToken private _token1;
+    OriginToken private _token0;
+    OriginToken private _token1;
     CauseFiCLPManager private _clpManager;
 
     uint256 private _reserve0;
@@ -27,23 +28,23 @@ contract CauseFiPair is ReentrancyGuard {
         _;
     }
 
-    constructor(address _token0Addr, address _token1Addr, address _bankAddr) {
-        _token0 = ACauseFiToken(_token0Addr);
-        _token1 = ACauseFiToken(_token1Addr);
-        _clpManager = CauseFiCLPManager(_bankAddr);
+    constructor(address _token0Addr, address _token1Addr, address _clpManagerAddr) {
+        _token0 = OriginToken(_token0Addr);
+        _token1 = OriginToken(_token1Addr);
+        _clpManager = CauseFiCLPManager(_clpManagerAddr);
     }
 
     function addLiquidity(
         uint256 _token0Amount,
         uint256 _token1Amount
-    ) external nonReentrant returns (uint256 clpMinted) {
-        clpMinted = _getCLPMinted(_token0Amount, _token1Amount);
+    ) external nonReentrant returns (uint256) {
+        uint256 clpMinted = _getCLPMinted(_token0Amount, _token1Amount);
 
         _addReserve(address(_token0), _token0Amount);
         _addReserve(address(_token1), _token1Amount);
 
-        ACauseFiToken(_token0).mint(address(this), _token0Amount);
-        ACauseFiToken(_token1).mint(address(this), _token1Amount);
+        OriginToken(_token0).mint(address(this), _token0Amount);
+        OriginToken(_token1).mint(address(this), _token1Amount);
 
         _clpManager.lock(address(this), clpMinted);
 
@@ -54,25 +55,23 @@ contract CauseFiPair is ReentrancyGuard {
             _token1Amount,
             clpMinted
         );
+
+        return clpMinted;
     }
 
     function removeLiquidity(
         uint256 _clpAmount
-    )
-        external
-        nonReentrant
-        returns (uint256 token0Amount, uint256 token1Amount)
-    {
-        token0Amount = _calculateRemoveAmount(_clpAmount, _reserve0);
-        token1Amount = _calculateRemoveAmount(_clpAmount, _reserve1);
+    ) external nonReentrant returns (uint256, uint256) {
+        uint256 token0Amount = _calculateRemoveAmount(_clpAmount, _reserve0);
+        uint256 token1Amount = _calculateRemoveAmount(_clpAmount, _reserve1);
 
         _clpManager.release(address(this), _clpAmount);
 
         _removeReserve(address(_token0), token0Amount);
         _removeReserve(address(_token1), token1Amount);
 
-        ACauseFiToken(_token0).burn(address(this), token0Amount);
-        ACauseFiToken(_token1).burn(address(this), token1Amount);
+        OriginToken(_token0).burn(address(this), token0Amount);
+        OriginToken(_token1).burn(address(this), token1Amount);
 
         emit Events.LiquidityRemoved(
             address(_token0),
@@ -81,6 +80,8 @@ contract CauseFiPair is ReentrancyGuard {
             token1Amount,
             _clpAmount
         );
+
+        return (token0Amount, token1Amount);
     }
 
     function swap(
@@ -111,8 +112,8 @@ contract CauseFiPair is ReentrancyGuard {
             ? _removeReserve(address(_token1), amountOut)
             : _removeReserve(address(_token0), amountOut);
 
-        ACauseFiToken(address(tokenIn)).mint(address(this), _amount);
-        ACauseFiToken(address(tokenOut)).burn(address(this), amountOut);
+        OriginToken(address(tokenIn)).mint(address(this), _amount);
+        OriginToken(address(tokenOut)).burn(address(this), amountOut);
 
         emit Events.TokenSwapped(
             address(tokenIn),
@@ -122,6 +123,13 @@ contract CauseFiPair is ReentrancyGuard {
         );
 
         return (amountOut, address(tokenIn));
+    }
+
+    function getReserve(address _token) external view returns (uint256) {
+        return
+            _checkTokenAddress(_token, address(_token0))
+                ? _reserve0
+                : _reserve1;
     }
 
     function _addReserve(address _token, uint256 _amount) private {

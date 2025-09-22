@@ -3,7 +3,7 @@
 pragma solidity ^0.8.29;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {WrappedCLP} from "../token/WrappedCLP.sol";
-import {BaseToken} from "../token/BaseToken.sol";
+import {OriginToken} from "../token/OriginToken.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract CauseFiWrappedCLPManager is ReentrancyGuard, Ownable {
@@ -20,7 +20,7 @@ contract CauseFiWrappedCLPManager is ReentrancyGuard, Ownable {
             string memory symbol
         ) = _wrappedTokenDetailGenerator(_token0, _token1);
 
-        WrappedCLP wrapped = new WrappedCLP(name, symbol, address(this));
+        WrappedCLP wrapped = new WrappedCLP(name, symbol);
 
         _wrappedCLP[pairId] = address(wrapped);
     }
@@ -60,21 +60,21 @@ contract CauseFiWrappedCLPManager is ReentrancyGuard, Ownable {
         (
             string memory token0Name,
             string memory token0Symbol
-        ) = _getBaseTokenDetail(_token0);
+        ) = _getOriginTokenDetail(_token0);
         (
             string memory token1Name,
             string memory token1Symbol
-        ) = _getBaseTokenDetail(_token1);
+        ) = _getOriginTokenDetail(_token1);
 
         name = string.concat("Wrapped ", token0Name, "x", token1Name);
         symbol = string.concat("w", token0Symbol, "x", token1Symbol);
     }
 
-    function _getBaseTokenDetail(
+    function _getOriginTokenDetail(
         address _token
     ) private view returns (string memory name, string memory symbol) {
-        name = BaseToken(_token).name();
-        symbol = BaseToken(_token).symbol();
+        name = OriginToken(_token).name();
+        symbol = OriginToken(_token).symbol();
     }
 
     function _getWrappedCLPStatus(

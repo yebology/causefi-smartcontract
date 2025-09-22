@@ -2,12 +2,11 @@
 
 pragma solidity ^0.8.29;
 
-// import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {OFT} from "@layerzerolabs/oft-evm/contracts/OFT.sol";
 import {CauseFiToken} from "../abstract/CauseFiToken.a.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract CLP is CauseFiToken {
+contract OriginToken is CauseFiToken {
     //
     constructor(
         string memory _name,

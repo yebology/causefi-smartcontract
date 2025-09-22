@@ -5,6 +5,7 @@ pragma solidity ^0.8.29;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {CLP} from "../../token/CLP.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {console} from "forge-std/console.sol";
 
 contract CauseFiCLPManager is Ownable, ReentrancyGuard {
     //

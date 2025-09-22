@@ -7,21 +7,21 @@ import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/inte
 import {OAppOptionsType3} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OAppOptionsType3.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Enums} from "../lib/Enums.l.sol";
-import {BaseToken} from "../token/BaseToken.sol";
+import {OriginToken} from "../token/OriginToken.sol";
 import {WrappedCLP} from "../token/WrappedCLP.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {CauseFiWrappedCLPManager} from "./CauseFiWrappedCLPManager.sol";
 
 contract CauseFiEntry is ReentrancyGuard, OApp, OAppOptionsType3 {
     //
-    CauseFiWrappedCLPManager private _clpManager;
+    CauseFiWrappedCLPManager private _wCLPManager;
 
     constructor(
         address _endpoint,
         address _owner,
         address __clpManager
     ) OApp(_endpoint, _owner) Ownable(_owner) {
-        _clpManager = CauseFiWrappedCLPManager(__clpManager);
+        _wCLPManager = CauseFiWrappedCLPManager(__clpManager);
     }
 
     function quoteSendMsg(
@@ -49,8 +49,8 @@ contract CauseFiEntry is ReentrancyGuard, OApp, OAppOptionsType3 {
         uint32 _dstEid,
         bytes calldata _options
     ) external payable nonReentrant returns (MessagingReceipt memory) {
-        BaseToken(_token0).burn(msg.sender, _token0Amount);
-        BaseToken(_token1).burn(msg.sender, _token1Amount);
+        OriginToken(_token0).burn(msg.sender, _token0Amount);
+        OriginToken(_token1).burn(msg.sender, _token1Amount);
 
         bytes memory _message = abi.encode(
             uint16(Enums.Message.ADD_LIQUIDITY),
@@ -84,7 +84,7 @@ contract CauseFiEntry is ReentrancyGuard, OApp, OAppOptionsType3 {
         uint32 _dstEid,
         bytes calldata _options
     ) external payable nonReentrant returns (MessagingReceipt memory) {
-        _clpManager.burn(_token0, _token1, msg.sender, _clpAmount);
+        _wCLPManager.burn(_token0, _token1, msg.sender, _clpAmount);
 
         bytes memory _message = abi.encode(
             uint16(Enums.Message.REMOVE_LIQUIDITY),
@@ -203,7 +203,7 @@ contract CauseFiEntry is ReentrancyGuard, OApp, OAppOptionsType3 {
         address _recipient,
         uint256 _clpAmount
     ) private nonReentrant {
-        _clpManager.mint(_token0, _token1, _recipient, _clpAmount);
+        _wCLPManager.mint(_token0, _token1, _recipient, _clpAmount);
     }
 
     function _receiveRemoveLiquidity(
@@ -213,8 +213,8 @@ contract CauseFiEntry is ReentrancyGuard, OApp, OAppOptionsType3 {
         uint256 _token1Amount,
         address _recipient
     ) private nonReentrant {
-        BaseToken(_token0).mint(_recipient, _token0Amount);
-        BaseToken(_token1).mint(_recipient, _token1Amount);
+        OriginToken(_token0).mint(_recipient, _token0Amount);
+        OriginToken(_token1).mint(_recipient, _token1Amount);
     }
 
     function _receiveSwap(
@@ -224,8 +224,8 @@ contract CauseFiEntry is ReentrancyGuard, OApp, OAppOptionsType3 {
         uint256 _amountToMint,
         address _recipient
     ) private nonReentrant {
-        BaseToken(_tokenToBurn).burn(_recipient, _amountToBurn);
-        BaseToken(_tokenToMint).mint(_recipient, _amountToMint);
+        OriginToken(_tokenToBurn).burn(_recipient, _amountToBurn);
+        OriginToken(_tokenToMint).mint(_recipient, _amountToMint);
     }
     //
 }
