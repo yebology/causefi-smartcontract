@@ -21,8 +21,8 @@ contract CauseFiPairTest is Test {
     address private constant BOB = address(1);
     address private constant ALICE = address(2);
 
-    uint256 private constant AMOUNT_TO_ADD_ARB = 100 ** 18;
-    uint256 private constant AMOUNT_TO_ADD_OPT = 90 ** 18;
+    uint256 private constant AMOUNT_TO_ADD_ARB = 100 * (10 ** 18);
+    uint256 private constant AMOUNT_TO_ADD_OPT = 90 * (10 ** 18);
 
     function setUp() public {
         _arbToken = new OriginToken("ARBITRUM", "ARB");
@@ -110,7 +110,7 @@ contract CauseFiPairTest is Test {
 
         _pair.addLiquidity(AMOUNT_TO_ADD_ARB, AMOUNT_TO_ADD_OPT);
 
-        uint256 amountToSwap = 10 ** 18;
+        uint256 amountToSwap = 10 * (10 ** 18);
 
         uint256 tokenOutSupplyBefore = OriginToken(_optToken).balanceOf(
             address(_pair)

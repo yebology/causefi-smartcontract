@@ -10,7 +10,7 @@ contract CauseFiWrappedCLPManager is ReentrancyGuard, Ownable {
     //
     mapping(bytes => address) private _wrappedCLP;
 
-    constructor() Ownable(msg.sender) {}
+    constructor(address _owner) Ownable(_owner) {}
 
     function addPair(address _token0, address _token1) external onlyOwner {
         bytes memory pairId = _getPairId(_token0, _token1);
@@ -31,7 +31,7 @@ contract CauseFiWrappedCLPManager is ReentrancyGuard, Ownable {
         address _recipient,
         uint256 _clpAmount
     ) external nonReentrant {
-        address wrapped = _getWrappedCLP(_token0, _token1);
+        address wrapped = getWrappedCLP(_token0, _token1);
         WrappedCLP(wrapped).mint(_recipient, _clpAmount);
     }
 
@@ -41,14 +41,14 @@ contract CauseFiWrappedCLPManager is ReentrancyGuard, Ownable {
         address _account,
         uint256 _clpAmount
     ) external {
-        address wrapped = _getWrappedCLP(_token0, _token1);
+        address wrapped = getWrappedCLP(_token0, _token1);
         WrappedCLP(wrapped).burn(_account, _clpAmount);
     }
 
-    function _getWrappedCLP(
+    function getWrappedCLP(
         address _token0,
         address _token1
-    ) private view returns (address) {
+    ) public view returns (address) {
         bytes memory pairId = _getPairId(_token0, _token1);
         return _wrappedCLP[pairId];
     }
